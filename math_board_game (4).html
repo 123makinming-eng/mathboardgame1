@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math Quest - Vintage Board Game</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Canvas Confetti -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Noto+Sans+TC:wght@500;700;900&display=swap');
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        body {
+            font-family: 'Fredoka', 'Noto Sans TC', sans-serif;
+            background-color: #231912;
+            color: #4a3b2c;
+            user-select: none;
+        }
+
+        /* Fixed viewport game container preventing vertical expansion */
+        .game-main-wrapper {
+            max-height: 100vh;
+        }
+
+        /* Responsive Container for exact Board Image */
+        .board-wrapper {
+            position: relative;
+            width: 100%;
+            max-width: 720px;
+            aspect-ratio: 1000 / 1200;
+            border-radius: 16px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.8), inset 0 0 15px rgba(0,0,0,0.2);
+            overflow: hidden;
+            background-image: url('Gemini_Generated_Image_mcr9nnmcr9nnmcr9.jfif');
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            border: 4px solid #7a6244;
+        }
+
+        /* Interactive Tokens Overlay Layer */
+        #tokens-layer {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        /* Player Token Styling */
+        .player-token {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 14px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.7);
+            transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+            transform: translate(-50%, -50%);
+            z-index: 30;
+            pointer-events: auto;
+            cursor: pointer;
+        }
+
+        @media (min-width: 640px) {
+            .player-token {
+                width: 38px;
+                height: 38px;
+                font-size: 16px;
+            }
+        }
+
+        /* 3D Dice styling */
+        .dice-container {
+            perspective: 600px;
+        }
+        .dice {
+            width: 56px;
+            height: 56px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+        .dice-face {
+            position: absolute;
+            width: 56px;
+            height: 56px;
+            background: #ffffff;
+            border: 3px solid #3d3124;
+            border-radius: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            box-shadow: inset 0 0 8px rgba(0,0,0,0.15);
+        }
+        .face-1 { transform: rotateY(0deg) translateZ(28px); }
+        .face-2 { transform: rotateY(90deg) translateZ(28px); }
+        .face-3 { transform: rotateY(180deg) translateZ(28px); }
+        .face-4 { transform: rotateY(-90deg) translateZ(28px); }
+        .face-5 { transform: rotateX(90deg) translateZ(28px); }
+        .face-6 { transform: rotateX(-90deg) translateZ(28px); }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background-color: #2b1e17;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .dot.red { background-color: #d62828; }
+
+        /* Custom Scrollbar for Game Log */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(0,0,0,0.08);
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #8c6d46;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between items-center p-2 sm:p-4">
+
+    <!-- Game Setup Modal -->
+    <div id="setup-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+        <div class="bg-[#fdf8eb] border-4 border-[#7a6244] rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl text-center relative overflow-hidden">
+            <h1 class="text-3xl md:text-4xl font-extrabold text-[#3d3124] mb-2 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-square-root-variable text-[#e76f51]"></i> 數理冒險棋盤
+            </h1>
+            <p class="text-[#705843] mb-6 font-bold">Math Quest - Interactive Board</p>
+
+            <div class="mb-6">
+                <label class="block text-lg font-bold text-[#3d3124] mb-3">選擇隊伍/玩家人數 (Select Players)</label>
+                <div class="flex justify-center gap-3 sm:gap-4">
+                    <button onclick="selectPlayerCount(4)" id="btn-p4" class="player-cnt-btn w-16 h-16 rounded-2xl border-3 border-[#7a6244] bg-[#ee9b00] text-white text-2xl font-black shadow-lg transition transform scale-105 flex flex-col items-center justify-center">
+                        4隊
+                    </button>
+                    <button onclick="selectPlayerCount(5)" id="btn-p5" class="player-cnt-btn w-16 h-16 rounded-2xl border-3 border-[#7a6244] bg-[#e9d8a6] text-[#3d3124] text-2xl font-black shadow-lg transition transform flex flex-col items-center justify-center">
+                        5隊
+                    </button>
+                    <button onclick="selectPlayerCount(6)" id="btn-p6" class="player-cnt-btn w-16 h-16 rounded-2xl border-3 border-[#7a6244] bg-[#e9d8a6] text-[#3d3124] text-2xl font-black shadow-lg transition transform flex flex-col items-center justify-center">
+                        6隊
+                    </button>
+                </div>
+            </div>
+
+            <!-- Player Legend Preview -->
+            <div id="player-preview" class="grid grid-cols-3 gap-2 mb-6 p-3 bg-[#f2e5cb] rounded-2xl border border-[#b89f80]">
+                <!-- Rendered dynamically -->
+            </div>
+
+            <button onclick="startGame()" class="w-full py-3.5 bg-[#2a9d8f] hover:bg-[#218376] text-white text-xl font-black rounded-2xl shadow-xl border-b-4 border-[#146157] transition transform active:scale-95">
+                開始遊戲 (Start Game) <i class="fa-solid fa-play ml-2"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Header -->
+    <header class="w-full max-w-6xl bg-[#f5ebd2] border-2 border-[#7a6244] rounded-2xl p-2 sm:p-2.5 mb-2 shadow-lg flex flex-wrap justify-between items-center gap-2">
+        <div class="flex items-center gap-2">
+            <div class="w-9 h-9 rounded-xl bg-[#c05621] text-white flex items-center justify-center text-lg font-black shadow">
+                <i class="fa-solid fa-chess-knight"></i>
+            </div>
+            <div>
+                <h2 class="text-base font-black text-[#3d3124] leading-tight">數理幾何大冒險</h2>
+                <span class="text-[11px] text-[#705843] font-bold">回合內可連續擲骰，切換請按「下一隊」</span>
+            </div>
+        </div>
+
+        <!-- Top Players Status Bar -->
+        <div id="players-status-bar" class="flex flex-wrap items-center gap-1.5">
+            <!-- Dynamic Player Status Badges -->
+        </div>
+    </header>
+
+    <!-- Main Game Area -->
+    <main class="w-full max-w-6xl flex flex-col lg:flex-row gap-3 items-center lg:items-start justify-center flex-1 max-h-[calc(100vh-80px)] overflow-hidden">
+
+        <!-- Board Container with Exact Generated Image -->
+        <div class="board-wrapper flex-shrink-0" id="board-container">
+            <!-- Dynamic Interactive Tokens Container -->
+            <div id="tokens-layer"></div>
+        </div>
+
+        <!-- Right Control Panel / Fixed Height Dashboard -->
+        <div class="w-full lg:w-80 h-full max-h-[640px] bg-[#f5ebd2] border-2 border-[#7a6244] rounded-3xl p-3 shadow-2xl flex flex-col gap-3 justify-between overflow-hidden">
+            
+            <!-- Current Active Player Info Deck -->
+            <div class="bg-[#ebdcc2] border-2 border-[#b89f80] rounded-2xl p-3 text-center shadow-inner flex-shrink-0">
+                <span class="text-[11px] font-black text-[#8c6d46] uppercase tracking-wider block mb-0.5">當前回合隊伍 (Current Turn)</span>
+                
+                <div class="flex items-center justify-center gap-2.5 my-1">
+                    <div id="active-avatar" class="w-10 h-10 rounded-full border-2 border-white flex items-center justify-center text-white text-xl shadow-md">
+                        <i class="fa-solid fa-cheese"></i>
+                    </div>
+                    <div class="text-left">
+                        <div id="active-player-name" class="text-lg font-black text-[#3d3124]">第 1 隊</div>
+                        <div id="active-player-pos" class="text-[11px] font-bold text-[#6b533a]">位於第 1 格 | 本輪: 0 步</div>
+                    </div>
+                </div>
+
+                <!-- 3D Interactive Dice System -->
+                <div class="flex flex-col items-center justify-center my-1">
+                    <div class="dice-container mb-2">
+                        <div id="dice" class="dice">
+                            <div class="dice-face face-1"><span class="dot red"></span></div>
+                            <div class="dice-face face-2"><span class="dot"></span><span class="dot" style="margin-left: 12px;"></span></div>
+                            <div class="dice-face face-3"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+                            <div class="dice-face face-4"><div class="grid grid-cols-2 gap-1.5"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div></div>
+                            <div class="dice-face face-5"><div class="grid grid-cols-2 gap-1"><span class="dot"></span><span class="dot"></span><span class="dot red"></span><span class="dot"></span><span class="dot"></span></div></div>
+                            <div class="dice-face face-6"><div class="grid grid-cols-2 gap-1"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span></div></div>
+                        </div>
+                    </div>
+
+                    <!-- Dual Action Buttons -->
+                    <div class="grid grid-cols-1 gap-2 w-full">
+                        <button id="roll-btn" onclick="handleRollDice()" class="py-2.5 bg-[#e76f51] hover:bg-[#d95d39] text-white font-black text-base rounded-xl shadow-lg border-b-4 border-[#a33b22] transition transform active:scale-95 flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-dice"></i> 擲骰子 (Roll Dice)
+                        </button>
+
+                        <button id="next-team-btn" onclick="handleNextTeam()" class="py-2.5 bg-[#2a9d8f] hover:bg-[#218376] text-white font-black text-base rounded-xl shadow-lg border-b-4 border-[#146157] transition transform active:scale-95 flex items-center justify-center gap-2">
+                            下一隊 (Next Team) <i class="fa-solid fa-arrow-right-long"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fixed Height Game Action History Log (Scrollable) -->
+            <div class="flex-1 bg-[#ebdcc2] border-2 border-[#b89f80] rounded-2xl p-2.5 flex flex-col min-h-0 overflow-hidden">
+                <div class="text-xs font-black text-[#705843] border-b border-[#c8b396] pb-1 mb-1.5 flex items-center justify-between flex-shrink-0">
+                    <span><i class="fa-solid fa-list-check mr-1"></i> 遊戲動態 Log</span>
+                    <span id="step-counter" class="text-[10px] bg-[#705843] text-white px-1.5 py-0.5 rounded">可連續擲骰</span>
+                </div>
+                <!-- Scrollable Log Area with Max Height Constraints -->
+                <div id="game-log" class="flex-1 overflow-y-auto custom-scrollbar text-xs space-y-1 font-bold text-[#4a3b2c] pr-1">
+                    <div class="text-gray-500 italic">遊戲準備就緒，請第 1 隊擲骰子...</div>
+                </div>
+            </div>
+
+            <!-- Settings / Utilities -->
+            <div class="flex gap-2 flex-shrink-0">
+                <button onclick="toggleAudio()" id="audio-btn" class="flex-1 py-1.5 bg-[#b89f80] hover:bg-[#a38869] text-[#3d3124] font-black rounded-xl text-xs transition flex items-center justify-center gap-1 shadow">
+                    <i class="fa-solid fa-volume-high"></i> 音效: 開
+                </button>
+                <button onclick="resetGamePrompt()" class="flex-1 py-1.5 bg-[#d62828] hover:bg-[#b91c1c] text-white font-black rounded-xl text-xs transition flex items-center justify-center gap-1 shadow">
+                    <i class="fa-solid fa-rotate-right"></i> 重新開始
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Action Card Modal (功能卡) -->
+    <div id="card-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-[#fdf0d5] border-4 border-[#c05621] rounded-3xl p-6 max-w-sm w-full shadow-2xl text-center relative">
+            <div class="w-16 h-16 mx-auto mb-3 bg-[#c05621] text-white rounded-2xl flex items-center justify-center text-3xl shadow-lg rotate-3">
+                <i class="fa-solid fa-gift"></i>
+            </div>
+            <span class="text-xs font-black tracking-widest text-[#c05621] uppercase">功能卡 (Action Card)</span>
+            <h3 id="card-title" class="text-2xl font-black text-[#660708] my-1.5">數學奇蹟</h3>
+            <p id="card-desc" class="text-sm text-[#3d3124] mb-6 font-bold leading-relaxed">運算靈感爆發！立即向前推進 2 格。</p>
+
+            <button onclick="closeCardModal()" class="w-full py-3 bg-[#c05621] hover:bg-[#9c4115] text-white font-black text-lg rounded-2xl shadow-md border-b-4 border-[#7b2c0a]">
+                收下卡片 (OK)
+            </button>
+        </div>
+    </div>
+
+    <!-- Victory Modal -->
+    <div id="victory-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-[#fefae0] border-4 border-[#dda15e] rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl text-center">
+            <div class="text-6xl mb-2">🏆</div>
+            <h2 class="text-3xl font-black text-[#bc6c25] mb-1">恭喜通關！</h2>
+            <p id="winner-name" class="text-2xl font-extrabold text-[#283618] mb-4">第 1 隊 率先抵達終點！</p>
+
+            <div class="bg-[#faedcd] rounded-2xl p-3 mb-6 text-left border border-[#cca43b]">
+                <h4 class="text-xs font-black text-[#8a5a00] uppercase mb-2 text-center">最終站位 (Final Standings)</h4>
+                <div id="leaderboard-list" class="space-y-1.5 text-sm font-black"></div>
+            </div>
+
+            <button onclick="resetGame()" class="w-full py-3.5 bg-[#606c38] hover:bg-[#283618] text-white text-lg font-black rounded-2xl shadow-xl border-b-4 border-[#141b0d] transition">
+                再玩一局 (Play Again)
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /* Exact Normalized Pixel Coordinates mapped directly to generated board image (1000 x 1200 space) */
+        const TILE_DATA = [
+            { id: 1,  x: 180, y: 940 },
+            { id: 2,  x: 260, y: 990 },
+            { id: 3,  x: 340, y: 940 },
+            { id: 4,  x: 420, y: 990 },
+            { id: 5,  x: 500, y: 940 },
+            { id: 6,  x: 580, y: 990 },
+            { id: 7,  x: 650, y: 940 },
+            { id: 8,  x: 730, y: 890 }, // Start of Flash (靈光一閃)
+            { id: 9,  x: 810, y: 940 },
+            { id: 10, x: 890, y: 890, actionCard: true }, // 功能卡
+            { id: 11, x: 880, y: 790 },
+            { id: 12, x: 810, y: 750 },
+            { id: 13, x: 730, y: 710 }, // Black Hole Target
+            { id: 14, x: 660, y: 660 },
+            { id: 15, x: 580, y: 710 }, // Flash Target
+            { id: 16, x: 500, y: 660 },
+            { id: 17, x: 420, y: 710 },
+            { id: 18, x: 340, y: 660 },
+            { id: 19, x: 260, y: 610 },
+            { id: 20, x: 210, y: 520, actionCard: true }, // 功能卡
+            { id: 21, x: 290, y: 470 },
+            { id: 22, x: 370, y: 430 },
+            { id: 23, x: 450, y: 380 },
+            { id: 24, x: 530, y: 430 },
+            { id: 25, x: 610, y: 380 },
+            { id: 26, x: 680, y: 430 },
+            { id: 27, x: 760, y: 390 }, // Start of Black Hole (邏輯黑洞)
+            { id: 28, x: 760, y: 300 },
+            { id: 29, x: 710, y: 240 },
+            { id: 30, x: 630, y: 200, actionCard: true }, // 功能卡
+            { id: 31, x: 550, y: 250 },
+            { id: 32, x: 470, y: 200 },
+            { id: 33, x: 390, y: 250 },
+            { id: 34, x: 310, y: 200 },
+            { id: 35, x: 230, y: 250 },
+            { id: 36, x: 150, y: 180, goal: true }  // Goal Rainbow Tile
+        ];
+
+        /* Players Color and Icon Configuration */
+        const PLAYER_CONFIGS = [
+            { id: 0, name: '第 1 隊 (紅)', color: '#d62828', icon: 'fa-cheese' },
+            { id: 1, name: '第 2 隊 (藍)', color: '#0077b6', icon: 'fa-cheese' },
+            { id: 2, name: '第 3 隊 (綠)', color: '#2a9d8f', icon: 'fa-cheese' },
+            { id: 3, name: '第 4 隊 (黃)', color: '#e9c46a', icon: 'fa-cheese' },
+            { id: 4, name: '第 5 隊 (紫)', color: '#7209b7', icon: 'fa-cheese' },
+            { id: 5, name: '第 6 隊 (橙)', color: '#f4a261', icon: 'fa-cheese' }
+        ];
+
+        /* Action Cards Definition */
+        const ACTION_CARDS = [
+            { id: 'FORWARD2', title: '空間躍遷 (Warp)', desc: '邏輯思維爆發！立即向前推進 2 格。', effect: 'forward_2' },
+            { id: 'SHIELD', title: '邏輯護盾 (Shield)', desc: '獲得一個護盾！可防禦一次「邏輯黑洞」。', effect: 'add_shield' },
+            { id: 'SWAP', title: '量子糾纏 (Swap)', desc: '觸發維度替換！與目前最領先的隊伍交換位置。', effect: 'swap_lead' },
+            { id: 'BACK1', title: '計算失誤 (Oops)', desc: '粗心大意！不小心倒退 1 格。', effect: 'back_1' }
+        ];
+
+        /* Game State Variables */
+        let totalPlayers = 4;
+        let players = [];
+        let currentPlayerIndex = 0;
+        let isMoving = false;
+        let turnAccumulatedSteps = 0;
+        let audioEnabled = true;
+
+        /* Web Audio Synthesizer */
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+
+        function playSound(type) {
+            if (!audioEnabled) return;
+            try {
+                if (!audioCtx) audioCtx = new AudioCtx();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                const now = audioCtx.currentTime;
+
+                if (type === 'dice') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(180 + Math.random() * 150, now);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
+                    osc.start(now);
+                    osc.stop(now + 0.12);
+                } else if (type === 'step') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(360, now);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                    osc.start(now);
+                    osc.stop(now + 0.08);
+                } else if (type === 'shortcut') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.exponentialRampToValueAtTime(800, now + 0.4);
+                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                    osc.start(now);
+                    osc.stop(now + 0.4);
+                } else if (type === 'blackhole') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(500, now);
+                    osc.frequency.exponentialRampToValueAtTime(100, now + 0.5);
+                    gain.gain.setValueAtTime(0.35, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                    osc.start(now);
+                    osc.stop(now + 0.5);
+                } else if (type === 'card') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(523, now);
+                    osc.frequency.setValueAtTime(659, now + 0.12);
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                }
+            } catch(e){}
+        }
+
+        function toggleAudio() {
+            audioEnabled = !audioEnabled;
+            const btn = document.getElementById('audio-btn');
+            btn.innerHTML = audioEnabled 
+                ? '<i class="fa-solid fa-volume-high"></i> 音效: 開' 
+                : '<i class="fa-solid fa-volume-xmark"></i> 音效: 關';
+        }
+
+        /* Player Count Setup Selection */
+        function selectPlayerCount(cnt) {
+            totalPlayers = cnt;
+            document.querySelectorAll('.player-cnt-btn').forEach(btn => {
+                btn.classList.remove('bg-[#ee9b00]', 'text-white', 'scale-105');
+                btn.classList.add('bg-[#e9d8a6]', 'text-[#3d3124]');
+            });
+            document.getElementById(`btn-p${cnt}`).classList.add('bg-[#ee9b00]', 'text-white', 'scale-105');
+
+            const preview = document.getElementById('player-preview');
+            preview.innerHTML = '';
+            for (let i = 0; i < cnt; i++) {
+                const p = PLAYER_CONFIGS[i];
+                preview.innerHTML += `
+                    <div class="flex items-center gap-1.5 p-1.5 bg-white/80 rounded-xl border border-[#c4a988]">
+                        <div class="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs shadow" style="background-color: ${p.color}">
+                            <i class="fa-solid ${p.icon}"></i>
+                        </div>
+                        <span class="text-xs font-black text-[#3d3124] truncate">${p.name.split(' ')[0]} ${p.name.split(' ')[1]}</span>
+                    </div>
+                `;
+            }
+        }
+
+        /* Start Game */
+        function startGame() {
+            players = [];
+            for (let i = 0; i < totalPlayers; i++) {
+                players.push({
+                    ...PLAYER_CONFIGS[i],
+                    position: 1,
+                    hasShield: false
+                });
+            }
+            currentPlayerIndex = 0;
+            turnAccumulatedSteps = 0;
+            document.getElementById('setup-modal').classList.add('hidden');
+            
+            renderTokens();
+            updateTurnDisplay();
+            logMessage(`🎮 遊戲開始！共 ${totalPlayers} 隊參賽。每個隊伍可在回合內<b>連續擲骰子</b>！`);
+        }
+
+        /* Render Player Tokens on the Board Background */
+        function renderTokens() {
+            const layer = document.getElementById('tokens-layer');
+            layer.innerHTML = '';
+
+            const posGroups = {};
+            players.forEach(p => {
+                if (!posGroups[p.position]) posGroups[p.position] = [];
+                posGroups[p.position].push(p);
+            });
+
+            players.forEach(p => {
+                const tile = TILE_DATA.find(t => t.id === p.position) || TILE_DATA[0];
+                const group = posGroups[p.position];
+                const indexInGroup = group.indexOf(p);
+
+                let pctX = (tile.x / 1000) * 100;
+                let pctY = (tile.y / 1200) * 100;
+
+                let offsetX = 0;
+                let offsetY = 0;
+                if (group.length > 1) {
+                    const angle = (indexInGroup / group.length) * (2 * Math.PI);
+                    offsetX = Math.cos(angle) * 2.5;
+                    offsetY = Math.sin(angle) * 2.5;
+                }
+
+                const token = document.createElement('div');
+                token.id = `token-player-${p.id}`;
+                token.className = `player-token`;
+                token.style.left = `${pctX + offsetX}%`;
+                token.style.top = `${pctY + offsetY}%`;
+                token.style.backgroundColor = p.color;
+                token.title = `${p.name} (第 ${p.position} 格)`;
+                token.innerHTML = `<i class="fa-solid ${p.icon}"></i>`;
+
+                layer.appendChild(token);
+            });
+
+            renderStatusBar();
+        }
+
+        /* Top Player Status Bar */
+        function renderStatusBar() {
+            const bar = document.getElementById('players-status-bar');
+            bar.innerHTML = '';
+            players.forEach((p, idx) => {
+                const isActive = idx === currentPlayerIndex;
+                bar.innerHTML += `
+                    <div class="flex items-center gap-1.5 px-2 py-0.5 rounded-xl border ${isActive ? 'bg-white border-[#7a6244] shadow-md ring-2 ring-[#e76f51]' : 'bg-[#e2d5bd] border-[#b89f80] opacity-75'} transition">
+                        <div class="w-4 h-4 rounded-full text-white text-[9px] flex items-center justify-center shadow" style="background-color: ${p.color}">
+                            <i class="fa-solid ${p.icon}"></i>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <span class="text-xs font-black text-[#3d3124]">${p.name.split(' ')[0]}${p.name.split(' ')[1]}</span>
+                            <span class="text-[10px] font-extrabold bg-[#705843] text-white px-1 rounded">格 ${p.position}</span>
+                            ${p.hasShield ? '<span class="text-xs">🛡️</span>' : ''}
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        /* Update Active Player Display */
+        function updateTurnDisplay() {
+            const p = players[currentPlayerIndex];
+            document.getElementById('active-avatar').style.backgroundColor = p.color;
+            document.getElementById('active-avatar').innerHTML = `<i class="fa-solid ${p.icon}"></i>`;
+            document.getElementById('active-player-name').innerText = p.name;
+            document.getElementById('active-player-pos').innerText = `目前位於第 ${p.position} 格 | 本輪: ${turnAccumulatedSteps} 步`;
+
+            renderStatusBar();
+        }
+
+        /* Log message to scrollable container */
+        function logMessage(msg) {
+            const logBox = document.getElementById('game-log');
+            const item = document.createElement('div');
+            item.className = 'py-0.5 border-b border-[#d8c6ac] last:border-0';
+            item.innerHTML = msg;
+            logBox.appendChild(item);
+            // Auto scroll to bottom
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        /* Handle Rolling Dice Multiple Times in Current Turn */
+        function handleRollDice() {
+            if (isMoving) return;
+
+            const player = players[currentPlayerIndex];
+            isMoving = true;
+            document.getElementById('roll-btn').disabled = true;
+
+            const dice = document.getElementById('dice');
+            const rollVal = Math.floor(Math.random() * 6) + 1;
+
+            playSound('dice');
+
+            const rotations = {
+                1: { x: 0, y: 0 },
+                2: { x: 0, y: -90 },
+                3: { x: 0, y: -180 },
+                4: { x: 0, y: 90 },
+                5: { x: -90, y: 0 },
+                6: { x: 90, y: 0 }
+            };
+
+            const extraSpins = 720;
+            const rot = rotations[rollVal];
+
+            dice.style.transform = `rotateX(${rot.x + extraSpins}deg) rotateY(${rot.y + extraSpins}deg)`;
+
+            setTimeout(() => {
+                turnAccumulatedSteps += rollVal;
+                logMessage(`<span style="color:${player.color}">● ${player.name}</span> 擲出了 <b>${rollVal}</b> 點！`);
+                movePlayerSteps(player, rollVal);
+            }, 850);
+        }
+
+        /* Step by Step Token Animation */
+        function movePlayerSteps(player, steps, isForward = true) {
+            let remaining = steps;
+
+            const stepInterval = setInterval(() => {
+                if (remaining > 0) {
+                    if (isForward) {
+                        if (player.position >= 36) {
+                            player.position = 35; // Bounce back if over target 36
+                        } else {
+                            player.position++;
+                        }
+                    } else {
+                        if (player.position > 1) player.position--;
+                    }
+
+                    playSound('step');
+                    renderTokens();
+                    updateTurnDisplay();
+                    remaining--;
+                } else {
+                    clearInterval(stepInterval);
+                    checkTileTriggers(player);
+                }
+            }, 300);
+        }
+
+        /* Check Tile Triggers: 7 (靈光一閃), 27 (邏輯黑洞), 10,20,30 (功能卡), 36 (終點) */
+        function checkTileTriggers(player) {
+            const pos = player.position;
+
+            // 1. Shortcut: Tile 7 -> 15 (靈光一閃)
+            if (pos === 7) {
+                setTimeout(() => {
+                    playSound('shortcut');
+                    player.position = 15;
+                    logMessage(`✨ <span style="color:${player.color}">${player.name}</span> 觸發<b>【靈光一閃】</b>！順利躍升至第 15 格！`);
+                    renderTokens();
+                    checkTileTriggers(player);
+                }, 400);
+                return;
+            }
+
+            // 2. Trap: Tile 27 -> 13 (邏輯黑洞)
+            if (pos === 27) {
+                setTimeout(() => {
+                    if (player.hasShield) {
+                        player.hasShield = false;
+                        logMessage(`🛡️ <span style="color:${player.color}">${player.name}</span> 發動護盾，成功抵擋了<b>【邏輯黑洞】</b>！`);
+                        finishMoveAction();
+                    } else {
+                        playSound('blackhole');
+                        player.position = 13;
+                        logMessage(`🌀 <span style="color:${player.color}">${player.name}</span> 掉入<b>【邏輯黑洞】</b>！不幸退回第 13 格！`);
+                        renderTokens();
+                        finishMoveAction();
+                    }
+                }, 400);
+                return;
+            }
+
+            // 3. Action Cards: Tiles 10, 20, 30
+            if ([10, 20, 30].includes(pos)) {
+                setTimeout(() => {
+                    drawActionCard(player);
+                }, 350);
+                return;
+            }
+
+            // 4. Goal Victory: Tile 36
+            if (pos === 36) {
+                handleVictory(player);
+                return;
+            }
+
+            finishMoveAction();
+        }
+
+        /* Draw Action Card Modal */
+        function drawActionCard(player) {
+            playSound('card');
+            const card = ACTION_CARDS[Math.floor(Math.random() * ACTION_CARDS.length)];
+            
+            document.getElementById('card-title').innerText = card.title;
+            document.getElementById('card-desc').innerText = card.desc;
+            document.getElementById('card-modal').classList.remove('hidden');
+
+            window.activeCardEffect = () => {
+                if (card.effect === 'forward_2') {
+                    logMessage(`🃏 <span style="color:${player.color}">${player.name}</span> 前進 2 格！`);
+                    movePlayerSteps(player, 2, true);
+                    return;
+                } else if (card.effect === 'back_1') {
+                    logMessage(`🃏 <span style="color:${player.color}">${player.name}</span> 倒退 1 格。`);
+                    movePlayerSteps(player, 1, false);
+                    return;
+                } else if (card.effect === 'add_shield') {
+                    player.hasShield = true;
+                    logMessage(`🃏 <span style="color:${player.color}">${player.name}</span> 獲得防護盾 🛡️！`);
+                } else if (card.effect === 'swap_lead') {
+                    let sorted = [...players].sort((a,b) => b.position - a.position);
+                    let leader = sorted[0];
+                    if (leader.id !== player.id) {
+                        let temp = player.position;
+                        player.position = leader.position;
+                        leader.position = temp;
+                        logMessage(`🃏 <span style="color:${player.color}">${player.name}</span> 與領先隊伍 <span style="color:${leader.color}">${leader.name}</span> 交換了位置！`);
+                        renderTokens();
+                    } else {
+                        logMessage(`🃏 你已經是領先隊伍，位置保持不變。`);
+                    }
+                }
+                finishMoveAction();
+            };
+        }
+
+        function closeCardModal() {
+            document.getElementById('card-modal').classList.add('hidden');
+            if (window.activeCardEffect) {
+                window.activeCardEffect();
+                window.activeCardEffect = null;
+            }
+        }
+
+        /* Enable dice button for repeated rolls in current turn */
+        function finishMoveAction() {
+            isMoving = false;
+            document.getElementById('roll-btn').disabled = false;
+            updateTurnDisplay();
+        }
+
+        /* Next Team / Next Turn explicit click handler */
+        function handleNextTeam() {
+            if (isMoving) return;
+            const player = players[currentPlayerIndex];
+            logMessage(`➡️ <span style="color:${player.color}">${player.name}</span> 結束本輪（累積 ${turnAccumulatedSteps} 步）。`);
+            
+            currentPlayerIndex = (currentPlayerIndex + 1) % totalPlayers;
+            turnAccumulatedSteps = 0;
+            isMoving = false;
+            document.getElementById('roll-btn').disabled = false;
+            updateTurnDisplay();
+        }
+
+        /* Handle Victory */
+        function handleVictory(winner) {
+            try {
+                confetti({ particleCount: 160, spread: 100, origin: { y: 0.6 } });
+            } catch(e){}
+
+            document.getElementById('winner-name').innerText = `${winner.name} 順利到達 36 號終點！`;
+
+            const sorted = [...players].sort((a, b) => b.position - a.position);
+            const list = document.getElementById('leaderboard-list');
+            list.innerHTML = '';
+            
+            sorted.forEach((p, idx) => {
+                list.innerHTML += `
+                    <div class="flex justify-between items-center p-2 bg-white/80 rounded-xl border border-[#dfc298]">
+                        <span style="color:${p.color}">第 ${idx + 1} 名: ${p.name}</span>
+                        <span class="text-gray-700">第 ${p.position} 格</span>
+                    </div>
+                `;
+            });
+
+            document.getElementById('victory-modal').classList.remove('hidden');
+        }
+
+        function resetGamePrompt() {
+            if (confirm('確定要重新開始遊戲嗎？')) {
+                resetGame();
+            }
+        }
+
+        function resetGame() {
+            document.getElementById('victory-modal').classList.add('hidden');
+            document.getElementById('setup-modal').classList.remove('hidden');
+            selectPlayerCount(4);
+        }
+
+        window.onload = () => {
+            selectPlayerCount(4);
+        };
+    </script>
+</body>
+</html>
